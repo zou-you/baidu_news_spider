@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 import argparse
 from pathlib import Path
+from collections import defaultdict
 
 import pandas as pd
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -36,12 +37,6 @@ def get_args():
     )
 
     parser.add_argument(
-        "--only_start_date",
-        action='store_true',
-        help="Only the start date is recorded",
-    )
-
-    parser.add_argument(
         "--timed_task",
         action='store_true',
         help="Timed task",
@@ -51,10 +46,23 @@ def get_args():
 
 
 def crate_xlsx_file(responses, now, year_month):
-    df = pd.DataFrame(responses)
-    df = df[df.日期.str.contains(fr"小时|{now}| ")]
     file_path = Path(f"xls_files/{year_month}/{now}.xlsx")
-    df.to_excel(file_path, index=False)
+    excel_writer = pd.ExcelWriter(file_path, engine='xlsxwriter')
+
+    for response in responses:
+        for key, value in response.items():
+            expanded_data = []
+            for item in value:
+                for detail in item['detal']:
+                    expanded_item = {'类别': item['category'], '搜索词': item['key_word'], **detail}
+                    expanded_data.append(expanded_item)
+            df = pd.DataFrame(expanded_data)
+            df = df[df.日期.str.contains(fr"小时|{now}| ")]
+            df.drop_duplicates(subset='标题', inplace=True)
+            df.to_excel(excel_writer, sheet_name=key, index=False)
+
+    # 保存Excel文件
+    excel_writer.close()
 
 def start(start_date):
     now, year_month = get_date(yesterday=False)    # 定时任务，这里需要每天计算
@@ -70,10 +78,25 @@ def start(start_date):
     # 开始爬虫
     logger.info(f'开始爬取时间 {start_date}')
     responses = []
+    sheet_name, category = '', '', 
+    current_dct = defaultdict(list)
     for key_word in key_words_lst:
-        responses.extend(spider.search_news(query=key_word, sort_by='time').plain)
-        time.sleep(2)
-
+        if key_word.startswith('# '):
+            if sheet_name:
+                responses.append(current_dct)
+                current_dct = defaultdict(list)
+            sheet_name = key_word[2:]
+        elif key_word.startswith('## '):
+            category = key_word[3:]
+        else:
+            current_dct[sheet_name].append({
+                'category': category,
+                'key_word': key_word,
+                'detal': spider.search_news(query=key_word, sort_by='time').plain
+            })
+            logger.info(f'当前爬取对象：{sheet_name}-{category}-{key_word}')
+            time.sleep(1)
+    responses.append(current_dct)
     # 采集完成，写入excel
     crate_xlsx_file(responses, now, year_month)
 

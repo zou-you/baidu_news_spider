@@ -30,7 +30,7 @@ def timeout(seconds):
     return decorator
 
 
-def read_key_words(file_path="key_words.txt"):
+def read_key_words(file_path="key_words.md"):
     key_list = []
     f = open(file_path, encoding='utf-8')  # 返回一个文件对象
     lines = f.readlines()  # 读取全部内容
