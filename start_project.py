@@ -47,7 +47,7 @@ def get_args():
 
 def crate_xlsx_file(responses, now, year_month):
     file_path = Path(f"xls_files/{year_month}/{now}.xlsx")
-    excel_writer = pd.ExcelWriter(file_path, engine='xlsxwriter')
+    excel_writer = pd.ExcelWriter(file_path, engine='openpyxl')
 
     for response in responses:
         for key, value in response.items():
@@ -64,19 +64,15 @@ def crate_xlsx_file(responses, now, year_month):
     # 保存Excel文件
     excel_writer.close()
 
-def start(start_date):
+
+def baidu_search():
     now, year_month = get_date(yesterday=False)    # 定时任务，这里需要每天计算
-    if not start_date:
-        start_date = now
 
     # 读取关键词
     key_words_lst = read_key_words()
 
     # 初始化爬虫对象
     spider = BaiduSpider()
-
-    # 开始爬虫
-    logger.info(f'开始爬取时间 {start_date}')
     responses = []
     sheet_name, category = '', '', 
     current_dct = defaultdict(list)
@@ -100,6 +96,20 @@ def start(start_date):
     # 采集完成，写入excel
     crate_xlsx_file(responses, now, year_month)
 
+
+def start(start_date):
+    
+    # 百度资讯爬虫
+    logger.info(f'百度资讯爬取')
+    baidu_search()
+
+    # 其他网站
+    code_path = "./websites/"
+    file_list = os.listdir(code_path)
+    logger.info(f'运行文件列表： {file_list}')
+    for file in file_list:
+        os.system(f'python3 {code_path}/{file}')
+
     logger.info(f'*****爬取完成*****\n\n\n')
 
 
@@ -107,6 +117,6 @@ if __name__ == "__main__":
     args = get_args()
     if args.timed_task:
         print("定时任务启动")
-        schedule_daily_task(start, task_args=(args.start_date, ), hour=22, minute=0)
+        schedule_daily_task(start, task_args=(args.start_date, ), hour=23, minute=0)
     else:
         start(args.start_date)
