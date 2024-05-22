@@ -4,12 +4,11 @@ import random
 from datetime import datetime, timedelta
 import os
 from pathlib import Path
-
-from logger import setup_logger
-
 import signal
-import time
 from functools import wraps
+
+import pandas as pd
+from logger import setup_logger
 
 
 # 请求头集合
@@ -75,6 +74,18 @@ def get_date(yesterday=False):
     
     # 将日期格式化为字符串
     return date.strftime("%Y-%m-%d"), date.strftime("%Y年%m月")
+
+
+
+def append_sheet_to_excel(data, file_path, sheet_name):
+    # 追加新的sheet页到指定excel文件
+    excel_writer = pd.ExcelWriter(file_path, mode='a', engine='openpyxl')
+
+    df = pd.DataFrame(data)
+    df.to_excel(excel_writer, sheet_name=sheet_name, index=False)
+
+    # 保存Excel文件
+    excel_writer.close()
 
 
 # 创建当前日期文件夹

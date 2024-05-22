@@ -45,8 +45,7 @@ def get_args():
     return parser.parse_args()
 
 
-def crate_xlsx_file(responses, now, year_month):
-    file_path = Path(f"xls_files/{year_month}/{now}.xlsx")
+def crate_xlsx_file(responses, now, file_path):
     excel_writer = pd.ExcelWriter(file_path, engine='openpyxl')
 
     for response in responses:
@@ -65,8 +64,7 @@ def crate_xlsx_file(responses, now, year_month):
     excel_writer.close()
 
 
-def baidu_search():
-    now, year_month = get_date(yesterday=False)    # 定时任务，这里需要每天计算
+def baidu_search(now, file_path):
 
     # 读取关键词
     key_words_lst = read_key_words()
@@ -94,21 +92,26 @@ def baidu_search():
             time.sleep(1)
     responses.append(current_dct)
     # 采集完成，写入excel
-    crate_xlsx_file(responses, now, year_month)
+    crate_xlsx_file(responses, now, file_path)
 
 
 def start(start_date):
     
+    # 获取日期
+    now, year_month = get_date(yesterday=False)    # 定时任务，这里需要每天计算
+    # 指定文件
+    file_path = Path(f"xls_files/{year_month}/{now}.xlsx")
+    
     # 百度资讯爬虫
     logger.info(f'百度资讯爬取')
-    baidu_search()
+    baidu_search(now, file_path)
 
     # 其他网站
     code_path = "./websites/"
     file_list = os.listdir(code_path)
     logger.info(f'运行文件列表： {file_list}')
     for file in file_list:
-        os.system(f'python3 {code_path}/{file}')
+        os.system(f'python3 {code_path}/{file} --start_date {now} --file_path {file_path}')
 
     logger.info(f'*****爬取完成*****\n\n\n')
 
