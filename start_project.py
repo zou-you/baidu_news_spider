@@ -45,7 +45,7 @@ def get_args():
     return parser.parse_args()
 
 
-def crate_xlsx_file(responses, now, file_path):
+def crate_xlsx_file(responses, file_path):
     excel_writer = pd.ExcelWriter(file_path, engine='openpyxl')
 
     for response in responses:
@@ -56,7 +56,7 @@ def crate_xlsx_file(responses, now, file_path):
                     expanded_item = {'类别': item['category'], '搜索词': item['key_word'], **detail}
                     expanded_data.append(expanded_item)
             df = pd.DataFrame(expanded_data)
-            df = df[df.日期.str.contains(fr"小时|{now}| ")]
+            # df = df[df.日期.str.contains(fr"小时|{now}| ")]
             df.drop_duplicates(subset='标题', inplace=True)
             df.to_excel(excel_writer, sheet_name=key, index=False)
 
@@ -83,16 +83,26 @@ def baidu_search(now, file_path):
         elif key_word.startswith('## '):
             category = key_word[3:]
         else:
+            # 抓取详情
+            detal = spider.search_news(query=key_word, sort_by='time').plain
+            # 按时间去除
+            detal_select = []
+            for item in detal:
+                if '小时' in item['日期'] or now in item['日期'] or item['日期'] == ' ':
+                    detal_select.append(item)
+                else:
+                    break
+
             current_dct[sheet_name].append({
                 'category': category,
                 'key_word': key_word,
-                'detal': spider.search_news(query=key_word, sort_by='time').plain
+                'detal': detal_select
             })
             logger.info(f'当前爬取对象：{sheet_name}-{category}-{key_word}')
             time.sleep(1)
     responses.append(current_dct)
     # 采集完成，写入excel
-    crate_xlsx_file(responses, now, file_path)
+    crate_xlsx_file(responses, file_path)
 
 
 def start(start_date):
