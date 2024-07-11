@@ -8,6 +8,7 @@ import io
 import re
 import argparse
 import random
+from datetime import datetime
 import sys 
 sys.path.extend(['.', '..'])
 
@@ -18,8 +19,8 @@ from utils import sleep_time, now, MyHeaders, logger, timeout, get_date, append_
 
 requests.packages.urllib3.disable_warnings()
 
-WEBSITE = "IT之家"
-SHEET_NAME = "新产品资讯"
+WEBSITE = "维科网"
+SHEET_NAME = "半导体及PCB"
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -39,45 +40,44 @@ def get_args():
         default=None,
         help="The start time of the spider",
     )
-    
+
     return parser.parse_args()
 
 
 def get_bs(url):
     headers = {'User-Agent': random.choice(MyHeaders)}
     response = requests.get(url, headers=headers, verify=False)
-    response.encoding = 'utf-8'
+    response.encoding = 'gbk'
     bs = BeautifulSoup(response.text, 'html5lib')
 
     return bs
 
 @timeout(3600)
 def get_content(start_date=now, file_path=None):
-    url_index = "https://digi.ithome.com/elec"
-
-    # 访问链接
-    bs = get_bs(url_index)
-    text_list = bs.select('.c h2 a')
-    time_list = bs.select('.state.tody')    # 只找今日
-    info_list = bs.select('.m')
-    tags_list = bs.select('.tags')
+    url_index = "https://display.ofweek.com/CATList-2300-8100-display.html"
 
     output = []
-    # 找出符合要求的时间以及标题
-    for idx in range(len(time_list)):
-        text, tim, info, tags = text_list[idx], time_list[idx], info_list[idx], tags_list[idx]
+    tiem_pattern = r'\d{4}-\d{2}-\d{2}'
+    # 访问链接
+    bs = get_bs(url_index)
+    text_list = bs.select('.model_right.model_right2 h3 a')
+    time_list = bs.select('.date')
 
+    # 找出符合要求的时间以及标题
+    for text, tim in zip(text_list, time_list):
         date = tim.get_text(strip=True)
-        title = text['title'].strip().replace('·', '').replace('\n', '')
+        matches = re.findall(tiem_pattern, date)
+        if not matches:
+            continue
+        date = datetime.strptime(matches[0], '%Y-%m-%d').strftime('%Y-%m-%d')
+        if date < start_date:
+            continue
+        title = text.get_text().strip()
         url = text['href']
-        content = info.get_text(strip=True).strip().replace('\n', '').replace('\t', '')
-        tag = tags.get_text().replace('Tags：', ' ').strip()
 
         output.append({
             "标题": title,
-            "标签": tag,
             "日期": date,
-            "简介": content,
             "链接": url,
             "网站": WEBSITE
         })
@@ -87,7 +87,7 @@ def get_content(start_date=now, file_path=None):
         file_path = Path(f"xls_files/{year_month}/{now}.xlsx")
 
     # 保存结果
-    df = pd.DataFrame(output, columns=["标题", "标签", "日期", "简介", "链接", "网站"])
+    df = pd.DataFrame(output, columns=['标题', '日期', '链接', '网站'])
     append_sheet_to_excel(df, file_path, SHEET_NAME)
 
 

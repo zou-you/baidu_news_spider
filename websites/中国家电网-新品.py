@@ -8,6 +8,7 @@ import io
 import re
 import argparse
 import random
+from datetime import datetime
 import sys 
 sys.path.extend(['.', '..'])
 
@@ -18,8 +19,17 @@ from utils import sleep_time, now, MyHeaders, logger, timeout, get_date, append_
 
 requests.packages.urllib3.disable_warnings()
 
-WEBSITE = "IT之家"
+WEBSITE = "中国家电网-新品"
 SHEET_NAME = "新产品资讯"
+PRODUCTS = ["空调", "冰箱", "洗衣机", "电视影音", "智能家居"]
+URL_MAPPING = {
+    "空调": "http://ac.cheaa.com/xinpin.shtml",
+    "冰箱": "http://icebox.cheaa.com/xinpin.shtml",
+    "洗衣机": "http://washer.cheaa.com/xinpin.shtml",
+    "电视影音": "http://digitalhome.cheaa.com/xinpin.shtml",
+    "智能家居": "http://smarthome.cheaa.com/xinpin.shtml"
+}
+
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -39,7 +49,7 @@ def get_args():
         default=None,
         help="The start time of the spider",
     )
-    
+
     return parser.parse_args()
 
 
@@ -51,36 +61,35 @@ def get_bs(url):
 
     return bs
 
+
 @timeout(3600)
 def get_content(start_date=now, file_path=None):
-    url_index = "https://digi.ithome.com/elec"
-
-    # 访问链接
-    bs = get_bs(url_index)
-    text_list = bs.select('.c h2 a')
-    time_list = bs.select('.state.tody')    # 只找今日
-    info_list = bs.select('.m')
-    tags_list = bs.select('.tags')
-
     output = []
-    # 找出符合要求的时间以及标题
-    for idx in range(len(time_list)):
-        text, tim, info, tags = text_list[idx], time_list[idx], info_list[idx], tags_list[idx]
+    for product in PRODUCTS: 
+        logger.info(f"当前产品：{product}")
 
-        date = tim.get_text(strip=True)
-        title = text['title'].strip().replace('·', '').replace('\n', '')
-        url = text['href']
-        content = info.get_text(strip=True).strip().replace('\n', '').replace('\t', '')
-        tag = tags.get_text().replace('Tags：', ' ').strip()
+        # 访问链接
+        bs = get_bs(URL_MAPPING[product])
+        text_list = bs.select('.newsList li p.pctit a')
+        time_list = bs.select('.newsList li p:nth-of-type(2)')
 
-        output.append({
-            "标题": title,
-            "标签": tag,
-            "日期": date,
-            "简介": content,
-            "链接": url,
-            "网站": WEBSITE
-        })
+        # 找出符合要求的时间以及标题
+        for text, tim in zip(text_list, time_list):
+            source, date = tim.get_text(strip=True).split(' ')
+            date = datetime.strptime(date, '%Y/%m/%d').strftime('%Y-%m-%d')
+            if date < start_date:
+                continue
+            title = text.get_text().strip().replace('·', '').replace('\n', '').replace('\t', '')  # 获取纯文本内容（不带html标签）
+            url = text['href']
+
+            output.append({
+                "标题": title,
+                "来源": source,
+                "日期": date,
+                "简介": product,
+                "链接": url,
+                "网站": WEBSITE
+            })
 
     if not file_path:
         now, year_month = get_date(yesterday=False)

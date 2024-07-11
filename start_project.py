@@ -130,6 +130,6 @@ if __name__ == "__main__":
     args = get_args()
     if args.timed_task:
         print("定时任务启动")
-        schedule_daily_task(start, task_args=(args.start_date, ), hour=23, minute=0)
+        schedule_daily_task(start, task_args=(args.start_date, ), hour=22, minute=30)
     else:
         start(args.start_date)

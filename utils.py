@@ -7,6 +7,7 @@ from pathlib import Path
 import signal
 from functools import wraps
 
+from openpyxl import load_workbook
 import pandas as pd
 from logger import setup_logger
 
@@ -76,16 +77,26 @@ def get_date(yesterday=False):
     return date.strftime("%Y-%m-%d"), date.strftime("%Y年%m月")
 
 
-
-def append_sheet_to_excel(data, file_path, sheet_name):
-    # 追加新的sheet页到指定excel文件
-    excel_writer = pd.ExcelWriter(file_path, mode='a', engine='openpyxl')
-
-    df = pd.DataFrame(data)
-    df.to_excel(excel_writer, sheet_name=sheet_name, index=False)
-
-    # 保存Excel文件
-    excel_writer.close()
+def append_sheet_to_excel(data_frame, file_path, sheet_name):
+    try:
+        # 尝试加载已存在的Excel文件
+        book = load_workbook(file_path)
+        
+        if sheet_name in book.sheetnames:
+            with pd.ExcelWriter(file_path, engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:
+                writer.book = book
+                writer.sheets = {ws.title: ws for ws in book.worksheets}
+                startrow = writer.sheets[sheet_name].max_row
+                data_frame.to_excel(writer, sheet_name=sheet_name, index=False, header=False, startrow=startrow)
+        else:
+            with pd.ExcelWriter(file_path, engine='openpyxl', mode='a') as writer:
+                writer.book = book
+                writer.sheets = {ws.title: ws for ws in book.worksheets}
+                data_frame.to_excel(writer, sheet_name=sheet_name, index=False)
+    except FileNotFoundError:
+        # 如果Excel文件不存在，则创建新的文件和sheet页
+        with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+            data_frame.to_excel(writer, sheet_name=sheet_name, index=False)
 
 
 # 创建当前日期文件夹

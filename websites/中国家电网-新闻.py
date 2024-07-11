@@ -8,6 +8,7 @@ import io
 import re
 import argparse
 import random
+from datetime import datetime
 import sys 
 sys.path.extend(['.', '..'])
 
@@ -18,8 +19,8 @@ from utils import sleep_time, now, MyHeaders, logger, timeout, get_date, append_
 
 requests.packages.urllib3.disable_warnings()
 
-WEBSITE = "IT之家"
-SHEET_NAME = "新产品资讯"
+WEBSITE = "中国家电网-新闻"
+SHEET_NAME = "家电网"
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -39,7 +40,7 @@ def get_args():
         default=None,
         help="The start time of the spider",
     )
-    
+
     return parser.parse_args()
 
 
@@ -53,41 +54,56 @@ def get_bs(url):
 
 @timeout(3600)
 def get_content(start_date=now, file_path=None):
-    url_index = "https://digi.ithome.com/elec"
+    url_index = 'http://news.cheaa.com/'
 
-    # 访问链接
-    bs = get_bs(url_index)
-    text_list = bs.select('.c h2 a')
-    time_list = bs.select('.state.tody')    # 只找今日
-    info_list = bs.select('.m')
-    tags_list = bs.select('.tags')
-
+    page_turning = True  # 是否需要翻页
+    page_num = 1
     output = []
-    # 找出符合要求的时间以及标题
-    for idx in range(len(time_list)):
-        text, tim, info, tags = text_list[idx], time_list[idx], info_list[idx], tags_list[idx]
+    while page_turning:
+        logger.info(f"当前页：{page_num}")
 
-        date = tim.get_text(strip=True)
-        title = text['title'].strip().replace('·', '').replace('\n', '')
-        url = text['href']
-        content = info.get_text(strip=True).strip().replace('\n', '').replace('\t', '')
-        tag = tags.get_text().replace('Tags：', ' ').strip()
+        # 访问链接
+        bs = get_bs(url_index)
+        text_list = bs.select('.newsList li p.pctit a')
+        time_list = bs.select('.newsList li p:nth-of-type(2)')
 
-        output.append({
-            "标题": title,
-            "标签": tag,
-            "日期": date,
-            "简介": content,
-            "链接": url,
-            "网站": WEBSITE
-        })
+        # 找出符合要求的时间以及标题
+        for text, tim in zip(text_list, time_list):
+            source, date = tim.get_text(strip=True).split(' ')
+            date = datetime.strptime(date, '%Y/%m/%d').strftime('%Y-%m-%d')
+            if date < start_date:
+                if page_num == 1:      # 首页前几条可能不是最新的
+                    continue
+                page_turning = False
+                break
+            title = text.get_text().strip().replace('·', '').replace('\n', '').replace('\t', '')  # 获取纯文本内容（不带html标签）
+            url = text['href']
+    
+            output.append({
+                "标题": title,
+                "来源": source,
+                "日期": date,
+                "简介": '/',
+                "链接": url,
+                "网站": WEBSITE
+            })
+
+        # 进行翻页查找
+        page_data = bs.select('.next')[-1]
+        if page_data and page_data['href'] != url_index:
+            url_index = page_data['href']
+            page_num += 1
+            # 随机睡眠
+            time.sleep(sleep_time)
+        else:
+            break
 
     if not file_path:
         now, year_month = get_date(yesterday=False)
         file_path = Path(f"xls_files/{year_month}/{now}.xlsx")
 
     # 保存结果
-    df = pd.DataFrame(output, columns=["标题", "标签", "日期", "简介", "链接", "网站"])
+    df = pd.DataFrame(output, columns=["标题", "来源", "日期", "简介", "链接", "网站"])
     append_sheet_to_excel(df, file_path, SHEET_NAME)
 
 
